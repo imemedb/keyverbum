@@ -276,7 +276,12 @@ class TfIdf(KeywordsExtractor):
         self.n_keywords = n_keywords
         self.tokens_filter = tokens_filter
         self.tfidf = TfidfVectorizer(
-            ngram_range=ngram_range, max_df=max_df, min_df=min_df, smooth_idf=True, use_idf=True
+            ngram_range=ngram_range,
+            max_df=max_df,
+            min_df=min_df,
+            smooth_idf=True,
+            use_idf=True,
+            analyzer="word",
         )
         self.feature_names = None
 
