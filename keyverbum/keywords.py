@@ -14,6 +14,7 @@ from scipy.cluster.hierarchy import linkage, cophenet, fcluster
 from scipy.spatial.distance import pdist
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from yake import KeywordExtractor
 
 logging.basicConfig(format="%(asctime)s: %(levelname)s: %(message)s", level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -282,6 +283,7 @@ class TfIdf(KeywordsExtractor):
             smooth_idf=True,
             use_idf=True,
             analyzer="word",
+            stop_words=self.tokens_filter.stopwords,
         )
         self.feature_names = None
 
@@ -324,3 +326,29 @@ class TfIdf(KeywordsExtractor):
         keywords = self._extract_topn_from_vector(self.feature_names, sorted_items, self.n_keywords)
 
         return keywords
+
+
+class YAKE(KeywordsExtractor):
+    def __init__(
+        self,
+        lang: str = "ru",
+        ngrams: int = 3,
+        dedup_lim: float = 0.9,
+        dedup_func: str = "seqm",
+        window: int = 2,
+        n_keywords: int = 10,
+    ):
+        self.__yake = KeywordExtractor(
+            lan=lang,
+            n=ngrams,
+            dedupLim=dedup_lim,
+            dedupFunc=dedup_func,
+            windowsSize=window,
+            top=n_keywords,
+        )
+
+    def fit(self, X, y=None):
+        return self
+
+    def predict(self, X: str, y=None):
+        self.__yake.extract_keywords(X)
