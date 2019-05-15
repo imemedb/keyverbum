@@ -174,7 +174,6 @@ class TopicalPagerank(KeywordsExtractor):
                 self.phrases[" ".join(sorted(phrase))] = [
                     i for i, j in enumerate(phrases) if j == phrase
                 ]
-        logger.debug("Found {} keyphrases".format(len(self.phrases)))
 
     def calc_distance(self, topic_a, topic_b):
         """
@@ -218,7 +217,6 @@ class TopicalPagerank(KeywordsExtractor):
             cluster_data[cluster].append(
                 " ".join(sorted([str(i) for i in count.inverse_transform(bag.toarray()[n])[0]]))
             )
-        logger.debug("Found {} keyphrase clusters (topics)".format(len(cluster_data)))
         topic_clusters = [frozenset(i) for i in cluster_data.values()]
         # apply pagerank to find most prominent topics
         # Sergey Brin and Lawrence Page. 1998.
@@ -268,7 +266,7 @@ class TfIdf(KeywordsExtractor):
     def __init__(
         self,
         tokens_filter: StopwordsFilter,
-        ngram_range=(1, 1),
+        ngram_range=(1, 3),
         max_df=1.0,
         min_df=1,
         n_keywords=10,
