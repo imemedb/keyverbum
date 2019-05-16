@@ -18,6 +18,8 @@ setup(
         "networkx",
         "numpy",
         "pytest",
+        "yake",
+        "requests",
     ],
     zip_safe=False,
 )
