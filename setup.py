@@ -20,6 +20,7 @@ setup(
         "pytest",
         "yake",
         "requests",
+        "flask",
     ],
     zip_safe=False,
 )

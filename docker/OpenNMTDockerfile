@@ -1,0 +1,17 @@
+FROM pytorch/pytorch:latest
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+RUN git clone https://github.com/OpenNMT/OpenNMT-py.git && cd OpenNMT-py && pip install -r requirements.txt && python setup.py install
+
+COPY conf.json OpenNMT-py/available_models/conf.json
+COPY RIA_step_200000.pt OpenNMT-py/available_models/RIA_step_200000.pt
+COPY ria.model OpenNMT-py/available_models/ria.model
+
+ENV SERVER_PORT 5000
+EXPOSE "$SERVER_PORT"
+
+# set default command
+CMD ["python", "OpenNMT/server.py"]

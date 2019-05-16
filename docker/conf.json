@@ -1,0 +1,21 @@
+{
+  "models_root": "./available_models",
+  "models": [
+    {
+      "id": 1,
+      "model": "RIA_step_200000.pt",
+      "timeout": 600,
+      "on_timeout": "to_cpu",
+      "load": true,
+      "opt": {
+        "batch_size": 1,
+        "gpu": 0,
+        "beam_size": 5
+      },
+      "tokenizer": {
+        "type": "sentencepiece",
+        "model": "ria.model"
+      }
+    }
+  ]
+}

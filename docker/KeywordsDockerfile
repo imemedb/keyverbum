@@ -1,0 +1,17 @@
+FROM pytorch/pytorch:latest
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+
+RUN git clone https://github.com/kuparez/keyverbum.git && cd keyverbum && pip install .
+RUN python -m nltk.downloader stopwords
+RUN python -m nltk.downloader punkt
+
+COPY api.py api.py
+
+ENV SERVER_PORT 5050
+EXPOSE "$SERVER_PORT"
+
+# set default command
+CMD ["python", "api.py"]
