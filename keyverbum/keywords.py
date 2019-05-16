@@ -14,6 +14,7 @@ from scipy.cluster.hierarchy import linkage, cophenet, fcluster
 from scipy.spatial.distance import pdist
 from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.pipeline import Pipeline
 from yake import KeywordExtractor
 
 logging.basicConfig(format="%(asctime)s: %(levelname)s: %(message)s", level=logging.DEBUG)
@@ -24,25 +25,25 @@ class BasicPreprocessor(TransformerMixin):
     def fit(self, X, y=None):
         return self
 
-    def transform(self, X, y=None):
+    def transform(self, X):
         text = re.sub(r"<[^>]*>", "", X)
         text = re.sub(r"[\W]+", " ", text.lower())
         return text
 
 
 class Stemmer(TransformerMixin):
-    def fit(self, X: str, y=None):
+    def fit(self, X: str):
         return self
 
-    def transform(self, X, y):
+    def transform(self, X):
         return NotImplementedError()
 
 
 class NoneStemmer(Stemmer):
-    def fit(self, X, y=None):
+    def fit(self, X):
         return None
 
-    def transform(self, X: str, y=None):
+    def transform(self, X: str):
         return X.lower()
 
 
@@ -50,26 +51,54 @@ class PymorphyStemmer(Stemmer):
     def __init__(self, morph):
         self.morph: pymorphy2.MorphAnalyzer = morph
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         return self
 
-    def transform(self, X: str, y=None):
+    def transform(self, X: str):
         return self.morph.normal_forms(X)[0]
 
 
+class Tokenizer(TransformerMixin):
+    def fit(self, X):
+        return self
+
+    def transform(self, X: str) -> List[str]:
+        if not isinstance(X, str):
+            raise TypeError("Tokenizer input must be string")
+
+        return X.split()
+
+
+class NltkTokenizer(Tokenizer):
+    def __init__(self, language="russian"):
+        self.language = language
+
+    def transform(self, X: str) -> List[str]:
+        if not isinstance(X, str):
+            raise TypeError("Tokenizer input must be string")
+
+        text = []
+
+        for sent in sent_tokenize(X, language=self.language):
+            for word in word_tokenize(sent, language=self.language):
+                text.append(word)
+
+        return text
+
+
 class StopwordsFilter(TransformerMixin):
-    def __init__(self, lang: str):
+    def __init__(self, language: str):
         try:
-            self.stopwords = set(stopwords.words(lang))
+            self.stopwords = set(stopwords.words(language))
         except LookupError as e:
-            logger.warning(f"Could not load nltk stopwords for lang {lang}. {e}")
+            logger.warning(f"Could not load nltk stopwords for language {language}. {e}")
             self.stopwords = {}
 
-    def fit(self, X, y=None):
+    def fit(self, X):
         return self
 
     def transform(
-        self, X: Union[Iterable[str], Iterable[Iterable[str]]], y=None
+        self, X: Union[Iterable[str], Iterable[Iterable[str]]]
     ) -> Optional[Union[str, List[str], List[List[str]]]]:
         res: Optional[Union[str, List[str], List[List[str]]]] = []
         if not isinstance(X, str):
@@ -95,20 +124,26 @@ class KeywordsExtractor(BaseEstimator, ClassifierMixin):
 
 class Textrank(KeywordsExtractor):
     def __init__(
-        self, ratio=0.2, words=None, split=True, scores=False, pos_filter=("NN", "JJ"), deacc=True
+        self,
+        ratio=0.2,
+        n_keywords=None,
+        split=True,
+        scores=False,
+        pos_filter=("NN", "JJ"),
+        deacc=True,
     ):
         self.deacc = deacc
         self.pos_filter = pos_filter
         self.scores = scores
         self.split = split
-        self.words = words
+        self.n_keywords = n_keywords
         self.ratio = ratio
 
     def predict(self, X: str, y=None) -> Union[List[Tuple[str, float]], List[str], str]:
         return keywords(
             X,
             ratio=self.ratio,
-            words=self.words,
+            words=self.n_keywords,
             split=self.split,
             scores=self.scores,
             pos_filter=self.pos_filter,
@@ -118,17 +153,8 @@ class Textrank(KeywordsExtractor):
 
 
 class TopicalPagerank(KeywordsExtractor):
-    def __init__(
-        self,
-        morph: pymorphy2.MorphAnalyzer,
-        stemmer: Stemmer,
-        preprocessor: BasicPreprocessor,
-        stopwords: StopwordsFilter,
-        lang: str,
-    ):
-        self.lang = lang
-        self.stopwords = stopwords
-        self.preprocessor = preprocessor
+    def __init__(self, morph: pymorphy2.MorphAnalyzer, stemmer: Stemmer, n_keywords: int = 10):
+        self.n_keywords = n_keywords
         self.tag_set = {"ADJF", "ADJS", "NOUN", "JJ", "JJR", "JJS", "NN", "NNS", "NNP", "NNPS"}
 
         # mapping of keyphrases to its positions in text
@@ -140,11 +166,9 @@ class TopicalPagerank(KeywordsExtractor):
         self.text = []
         self.topics = []
 
-    def fit(self, X: str, y=None):
+    def fit(self, X: List[str], y=None):
         """Fit keywords extractor for single text"""
-        for sent in sent_tokenize(self.preprocessor.transform(X), language=self.lang):
-            for word in word_tokenize(sent, language=self.lang):
-                self.text.append(word)
+        self.text = X
         return self
 
     def _extract_phrases(self):
@@ -237,7 +261,7 @@ class TopicalPagerank(KeywordsExtractor):
         self.topics = sorted([(b, list(a)) for a, b in pr.items()], reverse=True)
 
     def predict(
-        self, n: int, y=None, cluster_strategy="average", max_d=1.25, extract_strategy="first"
+        self, X: List[str], y=None, cluster_strategy="average", max_d=1.25, extract_strategy="first"
     ):
         """
         Get topN topic based n ranks and select
@@ -248,12 +272,13 @@ class TopicalPagerank(KeywordsExtractor):
                          -frequent - most frequent WIP
         :return: list of most ranked keyphrases
         """
+        self.fit(X, y)
         result = []
         self._extract_phrases()
         self._identify_topics(strategy=cluster_strategy, max_d=max_d)
         if extract_strategy != "first":
             logger.warning("Using 'first' extract_strategy to extract keyphrases")
-        for rank, topic in self.topics[:n]:
+        for rank, topic in self.topics[: self.n_keywords]:
             if topic:
                 first_kp = topic[0]  # sorted(topic, key=lambda x: self.phrases[x][0])[0]
                 unstem_kp_sort = sorted([self.unstem_map[i] for i in first_kp.split(" ")])
@@ -263,25 +288,16 @@ class TopicalPagerank(KeywordsExtractor):
 
 
 class TfIdf(KeywordsExtractor):
-    def __init__(
-        self,
-        tokens_filter: StopwordsFilter,
-        ngram_range=(1, 3),
-        max_df=1.0,
-        min_df=1,
-        n_keywords=10,
-    ):
+    def __init__(self, ngrams=3, max_df=1.0, min_df=1, n_keywords=10):
 
         self.n_keywords = n_keywords
-        self.tokens_filter = tokens_filter
         self.tfidf = TfidfVectorizer(
-            ngram_range=ngram_range,
+            ngram_range=(1, ngrams),
             max_df=max_df,
             min_df=min_df,
             smooth_idf=True,
             use_idf=True,
             analyzer="word",
-            stop_words=self.tokens_filter.stopwords,
         )
         self.feature_names = None
 
@@ -312,12 +328,12 @@ class TfIdf(KeywordsExtractor):
 
         return results
 
-    def fit(self, X, y=None):
+    def fit(self, X: str, y=None):
         self.tfidf.fit(X, y)
         self.feature_names = self.tfidf.get_feature_names()
         return self
 
-    def predict(self, X, y=None):
+    def predict(self, X: str, y=None):
         tfidf_vec = self.tfidf.transform(X)
         sorted_items = self.__sort_coo(tfidf_vec.tocoo())
 
@@ -350,3 +366,12 @@ class YAKE(KeywordsExtractor):
 
     def predict(self, X: str, y=None):
         self.__yake.extract_keywords(X)
+
+
+preprocessing_pipeline = Pipeline(
+    [
+        ("preprocessor", BasicPreprocessor()),
+        ("tokenizer", NltkTokenizer(language="russian")),
+        ("filter", StopwordsFilter(language="russian")),
+    ]
+)
