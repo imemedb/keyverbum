@@ -42,7 +42,7 @@ def get_keywords():
         return jsonify({"keywords": result})
 
     except Exception as e:
-        return jsonify(str(e)), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": str(e)}), HTTPStatus.BAD_REQUEST
 
 
 if __name__ == "__main__":
