@@ -338,6 +338,7 @@ class TfIdf(KeywordsExtractor):
         sorted_items = self.__sort_coo(tfidf_vec.tocoo())
 
         keywords = self._extract_topn_from_vector(self.feature_names, sorted_items, self.n_keywords)
+        keywords = [kw[0] for kw in sorted(keywords.items(), key=lambda x: x[1])]
 
         return keywords
 
@@ -365,7 +366,7 @@ class YAKE(KeywordsExtractor):
         return self
 
     def predict(self, X: str, y=None):
-        self.__yake.extract_keywords(X)
+        return [kw[0] for kw in self.__yake.extract_keywords(X)]
 
 
 preprocessing_pipeline = Pipeline(
